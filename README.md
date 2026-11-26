@@ -100,7 +100,7 @@ ffmpeg -i meeting.mp4 -vn -acodec libopus -b:a 32k meeting.ogg
 ### Диаризация спикеров (разделение по ролям)
 
 В текущей версии **диаризации нет** — весь текст выводится сплошным потоком, разбитым на абзацы по паузам. Если нужно разделение на «Спикер 1 / Спикер 2», варианты такие:
-- **Локально (open-source):** связка `whisperX` (`Whisper` + `pyannote.audio`) или более свежая и быстрая end-to-end модель **NVIDIA Sortformer** (через NVIDIA NeMo / `nemo-speech.cpp` — работает без тяжёлой кластеризации).
+- **Локально (open-source):** связка `whisperX` (`Whisper` + `pyannote.audio`) или свежая сверхбыстрая end-to-end модель **[NVIDIA Nemotron Diarization (Sortformer)](https://huggingface.co/blog/nvidia/nemotron-diarization)** (через NVIDIA NeMo / `nemo-speech.cpp` — работает без тяжёлой кластеризации).
 - **Облачные API со встроенной диаризацией:** **ElevenLabs Scribe** (одна из самых точных и быстрых моделей с нативной диаризацией и хорошим русским, ~\$0.20–\$0.22/час), **AssemblyAI** (~\$0.15/час) и **Deepgram Nova-3** (~\$0.26/час).
 
 ### Категоризация заметок
