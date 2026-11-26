@@ -1,0 +1,527 @@
+{
+  "name": "Voice Dispatcher - Cloud Auto Router (n8n Template)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "YOUR_INPUT_AUDIO_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Audio",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_INPUT_AUDIO_FOLDER_ID"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "6742021f-9774-4f70-bc37-44fe29a8c255",
+      "name": "Google Drive Trigger (Audio)",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2400,
+        4096
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "20c9fe0a-79d7-47e1-a6c5-bcb15475edaf",
+      "name": "Download Audio Binary",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -2112,
+        4096
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Ты — диспетчер и классификатор голосовых заметок. Сделай точную дословную транскрибацию аудио и определи категорию из списка: MEETINGS, CONTENT, WORK, INBOX. Верни СТРОГО валидный JSON без markdown-обёртки: { \\\"domain\\\": \\\"MEETINGS|CONTENT|WORK|INBOX\\\", \\\"sub_type\\\": \\\"...\\\", \\\"title\\\": \\\"...\\\", \\\"raw_transcript\\\": \\\"...\\\" }\"\n        },\n        {\n          \"inline_data\": {\n            \"mime_type\": \"audio/mp4\",\n            \"data\": \"{{ $binary.data.data }}\"\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "id": "f7f87045-368d-402b-8ccb-f48fdda6b903",
+      "name": "Gemini Flash (STT + Classifier)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1488,
+        4096
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Ты — диспетчер и классификатор голосовых заметок. Сделай точную дословную транскрибацию аудио и определи категорию из списка: MEETINGS, CONTENT, WORK, INBOX. Верни СТРОГО валидный JSON без markdown-обёртки: { \\\"domain\\\": \\\"MEETINGS|CONTENT|WORK|INBOX\\\", \\\"sub_type\\\": \\\"...\\\", \\\"title\\\": \\\"...\\\", \\\"raw_transcript\\\": \\\"...\\\" }\"\n        },\n        {\n          \"inline_data\": {\n            \"mime_type\": \"audio/mp4\",\n            \"data\": \"{{ $binary.data.data }}\"\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "id": "88aa1122-3344-5566-7788-9900aabbccdd",
+      "name": "Gemini Fallback (STT + Classifier)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1488,
+        4300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const responseText = $input.item.json.candidates[0].content.parts[0].text;\nconst cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();\nconst parsed = JSON.parse(cleanedText);\n\nconst triggerFile = $('Google Drive Trigger (Audio)').item.json;\nconst rawCreatedTime = triggerFile.createdTime || triggerFile.modifiedTime;\nconst fileDate = rawCreatedTime ? new Date(rawCreatedTime) : new Date();\n\nconst dateIso = fileDate.toISOString().split('T')[0];\nconst hours = String(fileDate.getHours()).padStart(2, '0');\nconst minutes = String(fileDate.getMinutes()).padStart(2, '0');\nconst seconds = String(fileDate.getSeconds()).padStart(2, '0');\nconst timeIso = `${hours}-${minutes}-${seconds}`;\nconst timestampFull = `${dateIso}_${timeIso}`;\n\nreturn {\n  domain: parsed.domain || 'INBOX',\n  sub_type: parsed.sub_type || 'Raw Note',\n  title: parsed.title || 'Voice Note',\n  raw_transcript: parsed.raw_transcript || '',\n  date_iso: dateIso,\n  time_iso: timeIso,\n  timestamp: timestampFull,\n  original_file_name: triggerFile.name || 'audio_note',\n  source_file_id: triggerFile.id\n};"
+      },
+      "id": "c4d08275-a0c9-4235-aa64-a75ccb0e4b4e",
+      "name": "Parse Gemini JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        4096
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "=---\ntitle: \"Raw Voice Note: {{ $json.timestamp }} — {{ $json.title }}\"\ncreated: {{ $json.date_iso }}\nupdated: {{ $json.date_iso }}\nsource: \"Voice Note via n8n\"\noriginal_file: \"{{ $json.original_file_name }}\"\noriginal_file_id: \"{{ $json.source_file_id }}\"\ncategory: \"{{ $json.domain }}\"\nsub_type: \"{{ $json.sub_type }}\"\nstatus: inbox\ntags:\n  - voice-note\n  - raw\n---\n\n# Сырая запись: {{ $json.original_file_name }}\n\n- **Время:** {{ $json.timestamp }}\n- **Категория:** {{ $json.domain }} ({{ $json.sub_type }})\n- **Заголовок:** {{ $json.title }}\n\n---\n\n## Полная расшифровка\n\n{{ $json.raw_transcript }}",
+        "name": "={{ $json.timestamp }}_RAW_{{ $json.original_file_name }}.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Transcripts",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "id": "55bb0011-2233-4455-6677-8899aabbccdd",
+      "name": "Save Raw Note to Inbox",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -640,
+        4250
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.domain }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "MEETINGS",
+              "output": 0
+            },
+            {
+              "value2": "CONTENT",
+              "output": 1
+            },
+            {
+              "value2": "WORK",
+              "output": 2
+            },
+            {
+              "value2": "INBOX",
+              "output": 3
+            }
+          ]
+        }
+      },
+      "id": "19994181-66d5-4203-948a-32be2da7023d",
+      "name": "Switch Domain Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        3950
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "=---\ntitle: \"Встреча: {{ $json.date_iso }} — {{ $json.title }}\"\ncreated: {{ $json.date_iso }}\nupdated: {{ $json.date_iso }}\nsource: \"Voice Note via n8n\"\ncategory: \"MEETINGS\"\nstatus: inbox\ntags:\n  - voice-note\n  - meetings\n---\n\n# Встреча: {{ $json.title }} ({{ $json.date_iso }})\n\n## Расшифровка\n\n{{ $json.raw_transcript }}",
+        "name": "={{ $json.timestamp }}_Meeting_{{ $json.title }}.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Transcripts",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "id": "39dbd983-72c2-40d4-b952-b748a3f5e598",
+      "name": "Save Meeting Note",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        3800
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "=---\ntitle: \"Контент: {{ $json.title }}\"\ncreated: {{ $json.date_iso }}\nupdated: {{ $json.date_iso }}\nsource: \"Voice Note via n8n\"\ncategory: \"CONTENT\"\nstatus: draft\ntags:\n  - voice-note\n  - content\n---\n\n# Идея для контента: {{ $json.title }}\n\n## Расшифровка\n\n{{ $json.raw_transcript }}",
+        "name": "={{ $json.timestamp }}_Content_{{ $json.title }}.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Transcripts",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "id": "99aa88bb-77cc-66dd-55ee-44ff33aa2211",
+      "name": "Save Content Note",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        3980
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "=---\ntitle: \"Работа: {{ $json.title }}\"\ncreated: {{ $json.date_iso }}\nupdated: {{ $json.date_iso }}\nsource: \"Voice Note via n8n\"\ncategory: \"WORK\"\nstatus: active\ntags:\n  - voice-note\n  - work\n---\n\n# Рабочая заметка: {{ $json.title }}\n\n## Расшифровка\n\n{{ $json.raw_transcript }}",
+        "name": "={{ $json.timestamp }}_Work_{{ $json.title }}.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Transcripts",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "id": "47ac8f6d-a12c-47f7-9ac2-fce54cc25d8d",
+      "name": "Save Work Note",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        4160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "=---\ntitle: \"Заметка: {{ $json.title }}\"\ncreated: {{ $json.date_iso }}\nupdated: {{ $json.date_iso }}\nsource: \"Voice Note via n8n\"\ncategory: \"INBOX\"\nstatus: inbox\ntags:\n  - voice-note\n  - inbox\n---\n\n# Заметка: {{ $json.title }}\n\n## Расшифровка\n\n{{ $json.raw_transcript }}",
+        "name": "={{ $json.timestamp }}_Inbox_{{ $json.title }}.md",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Transcripts",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_OUTPUT_TRANSCRIPTS_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "id": "2a3eac25-337f-43fd-8a3e-7d09306f5e30",
+      "name": "Save Inbox Note",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        4340
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Parse Gemini JSON').item.json.source_file_id }}",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_PROCESSED_AUDIO_FOLDER_ID",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "7890abcd-1234-5678-90ab-cdef12345678",
+      "name": "Move Audio to Processed Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        240,
+        4096
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Drive Trigger (Audio)": {
+      "main": [
+        [
+          {
+            "node": "Download Audio Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio Binary": {
+      "main": [
+        [
+          {
+            "node": "Gemini Flash (STT + Classifier)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Flash (STT + Classifier)": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Gemini Fallback (STT + Classifier)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Fallback (STT + Classifier)": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini JSON": {
+      "main": [
+        [
+          {
+            "node": "Save Raw Note to Inbox",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch Domain Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Domain Router": {
+      "main": [
+        [
+          {
+            "node": "Save Meeting Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Content Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Work Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Inbox Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Meeting Note": {
+      "main": [
+        [
+          {
+            "node": "Move Audio to Processed Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Content Note": {
+      "main": [
+        [
+          {
+            "node": "Move Audio to Processed Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Work Note": {
+      "main": [
+        [
+          {
+            "node": "Move Audio to Processed Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Inbox Note": {
+      "main": [
+        [
+          {
+            "node": "Move Audio to Processed Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

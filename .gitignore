@@ -1,0 +1,36 @@
+# Окружение и секреты
+.env
+.local.env
+.env.*
+!.env.example
+
+# Виртуальные окружения Python
+venv/
+.venv/
+env/
+
+# Кэш и артефакты Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Локальные данные, медиа и логи
+data/
+*.m4a
+*.mp3
+*.mp4
+*.wav
+*.ogg
+*.mkv
+*.mov
+*.webm
+*.log
+.tmp_log.txt
+
+# ОС и IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

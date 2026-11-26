@@ -1,0 +1,6 @@
+faster-whisper>=1.0.3
+python-dotenv>=1.0.0
+
+# Опционально для Windows с GPU NVIDIA (если в системе не установлены CUDA Toolkit / cuDNN 12):
+# nvidia-cublas-cu12
+# nvidia-cudnn-cu12
